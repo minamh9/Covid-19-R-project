@@ -1,6 +1,6 @@
 ---
-title: "Homework 3"
-author: "DTR"
+title: "Covid 19 project"
+author: "Mina Mehdinia"
 date: 'Due: Thursday June 2/2022 by 11:59 pm'
 output: rmdformats::material
 subtitle: 'STAT 363'
