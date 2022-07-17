@@ -1,0 +1,370 @@
+---
+title: "Homework 3"
+author: "DTR"
+date: 'Due: Thursday June 2/2022 by 11:59 pm'
+output: rmdformats::material
+subtitle: 'STAT 363'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+library(magrittr)
+library(dplyr)
+library(readr)
+library(tidyr)
+library(lubridate)
+library(pander)
+library(stringr)
+library(ggplot2)
+memory.limit(size=56000)
+```
+
+# Logistics
+
+- Make a copy of this template to write out your solution, and rename it before  knitting it the first time as file as `HW03.Rmd`.
+- Inside this .Rmd file do not include any personal identifier (such as your name, Odin ID, etc.). 
+- Knit your Rmd file as html and upload both the Rmd and html files with your solution to Canvas in `Assignments > Homework3` before Thursday June 2nd at 11:59 pm.
+
+
+# Objectives for this week's homework
+
+1. Upload `csv` files into R
+
+2. Become proficient at manipulating, filtering, summarizing, cleaning, recoding, combining, etc. data in R using `dplyr`, `tidyr`, and `purr`
+
+3. Use exploratory data analysis tools, such as summary statistics tables and figures to determine if a hypothesis has any merit
+
+4. Create informative summary tables and figures
+
+5. Use tools to extract information from character strings
+
+
+# Background and Data
+
+Although by this point some of you may be avoiding the information overload surrounding Covid-19, understanding what has happened up to now by direct exploration of the latest data directly from the source, and extracting one's own conclusions can be empowering. 
+
+At this point of the term you have an R toolbox broad enough to tackle the massive amount of data found in Johns Hopkins COVID-19 repository [(click here)](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data).  These data has been updated daily since the COVID-19 pandemic started. I also included links to other supplementary data sets to **potentially** explore the effectiveness of measures taken throughout the pandemic, including-mask use and vaccination. The datasets included are: 
+
+1. **covid.ts.cases**: daily time series for the confirmed number of COVID-19 cases at the county level for the US (file description [here](https://github.com/CSSEGISandData/COVID-19/blob/master/csse_covid_19_data/csse_covid_19_time_series/README.md)).
+
+2.  **covid.ts.deaths**: daily time series for the confirmed number of COVID-19 deaths at the county level for the US (file description [here](https://github.com/CSSEGISandData/COVID-19/blob/master/csse_covid_19_data/csse_covid_19_time_series/README.md)).
+
+3. **covid.usa.daily**: COVID-19 USA daily state reports with the number of confirmed cases between April 14th and May 7th (file description [here](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data#daily-reports-csse_covid_19_daily_reports)).
+
+
+4. **Vaccination data**: state level COVID-19 daily vaccination numbers time series data from the Johns Hopkins University repository (file description [here](https://github.com/govex/COVID-19/blob/master/data_tables/vaccine_data/us_data/readme.md), )
+
+5. **State policy data**: data files (one file by state) about dates and description of policies going into/out of effect.  To load data for a particular state go to [this link](https://github.com/govex/COVID-19/tree/govex_data/data_tables/policy_data/table_data/Current), find the name 
+of the state file you want to work with.  For example if you want to load data from California, use
+```{r echo=T, eval=F}
+policytrackerCA <- read_csv("https://raw.githubusercontent.com/govex/COVID-19/govex_data/data_tables/policy_data/table_data/Current/California_policy.csv")
+```
+To change the state you just need to replace the name of the state in the file name (e.g., `California_policy.csv` by `Oregon_policy.csv`) at the end of the link above for the one you want to work with.
+
+Here is the data:
+
+```{r load_data, echo=FALSE}
+#confirmed COVID-19 time series cases US (trimmed to include from 01/01/2021 to 05/23/2022)
+covid.usa.ts.confirmed <- read_csv('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv') %>%  select(UID:Combined_Key,`1/1/21`:`5/23/22`)
+
+#Confirmed COVID-19 time series deaths US (trimmed to include from 01/01/2021 to 05/23/2022) these data include the population by county
+covid.usa.ts.deaths <- read_csv('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv') %>%
+  select(UID:Population,`1/1/21`:`5/23/22`)
+
+#Daily data summary by state for 05-23-20222
+covid.usa.daily <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports_us/05-23-2022.csv") 
+
+#US vaccinated people data
+vacc.people <- read_csv("https://raw.githubusercontent.com/govex/COVID-19/master/data_tables/vaccine_data/us_data/time_series/people_vaccinated_us_timeline.csv")
+
+
+#uncomment to load policy tracker data for a state
+#data on policy adoption by state (there is one file by state).  If loading data in CA, use:
+#policytrackerCA <- read_csv("https://raw.githubusercontent.com/govex/COVID-19/govex_data/data_tables/policy_data/table_data/Current/California_policy.csv")
+#If loading data in OR, use:
+policytrackerOR <- read_csv("https://raw.githubusercontent.com/govex/COVID-19/govex_data/data_tables/policy_data/table_data/Current/Oregon_policy.csv")
+```
+
+The goal is for you to generate insights about the COVID-19 pandemic by states in the US and attempt to identify any trends in the data that inform about the efficacy of particular measures taken.
+
+# Your Task
+
+## Part 1: Wrangling the COVID-19 time series data
+
+1. Identify and list the *primary and foreign keys* for each data frame.
+
+<h5 style="font-family:verdana;color:red;size:2">covid.usa.daily:</h5>
+
+  .Primary key: Province_State
+  
+  .Foreign key: Province_State is in confirmed, death, and       vacc.people data frame, but there is no direct relatinship    with policytrackerOR data frame.
+  
+<h5 style="font-family:verdana;color:red;">covid.usa.ts.confirmed:</h5>
+
+  .Primary key: UID
+
+  .Foreign key: UID is in both daily and death data frame but    there is no direct relationship with policytrackerOR and      vacc.people data frame.
+
+<h5 style="font-family:verdana;color:red;">covid.usa.ts.deaths:</h5>
+
+  .Primary key: UID
+
+  .Foreign key: UID is in both daily and confirmed data frame,   but there is no relationship with policytrackerOR, and        vacc.people data frame. 
+  
+<h5 style="font-family:verdana;color:red;">vacc.people:</h5>
+  .Primary key: There is no primary key in vacc.people data      frame, because all variables do not uniquely identify an      observation or have NULL values.
+  
+  .Foreign key: Since there is no primary key, there is no       foreign key as well.
+  
+<h5 style="font-family:verdana;color:red;">policytrackerOR:</h5>
+
+  .Primary key: There is no primary key in policytrackerOR data   frame, because all variables do not uniquely identify an      observation or have NULL values. 
+  
+  .Foreign key: Since there is no primary key, there is no       foreign key as well.
+
+
+
+2. Using the time series data sets `covid.usa.ts.confirmed` and `covid.use.ts.deaths`, which are both at the county level and are in wide format, reshape them into long format (using the function `pivot_longer`) to generate a single new data frame with the daily time series **BY STATE** including both number of confirmed cases and deaths, so that you have one row for each combination of state and date.  Call this new data frame `covid.usa.states.ts`. 
+
+**Note**: after reshaping your file into long format, your new `date` column (or however you decide to call it) needs to be converted into a `Date-Time` type variable. For example, if your variable is called `my.date.variable`, you can make this conversion using `lubridate::mdy(my.date.variable)`.
+```{r echo=FALSE}
+#reshape covid.usa.ts.confirmed into long format
+confirmed_cases<- covid.usa.ts.confirmed %>% 
+  pivot_longer(contains("/"), # we select all columns that has / in it
+               names_to = "Date", # rename that column dates
+               values_to = "confirmed_Case")%>% #output values 
+  select(Province_State, Date, confirmed_Case) %>% #selecting Province_State, Date,and confirmed_Case column
+  group_by(Province_State, Date)%>% #group the data frame by Province_State, Date column 
+  summarise(Province_State,confirmed_Case =sum(confirmed_Case) ) #set confirmed_Case to the sum of confirmed_Case (per state, per day)
+
+## convert to a 'Date-Time' type variable by using lubridate::mdy()
+confirmed_cases$Date <- lubridate::mdy(confirmed_cases$Date)
+
+
+#reshape covid.usa.ts.deaths into long format
+#similar code as above but death-case instead of confirmed_case
+death_cases<- covid.usa.ts.deaths %>%
+  pivot_longer(contains("/"),
+               names_to = "Date",
+               values_to = "Death_Case")%>%
+  select(Province_State, Date, Death_Case) %>%
+  group_by(Province_State, Date)%>%
+  summarise(Death_Case=sum(Death_Case))
+death_cases$Date <- lubridate::mdy(death_cases$Date)
+
+```
+
+
+```{r}
+#create a new single data frame with daily time series by state by combinin the two data frame using full_join
+covid.usa.states.ts <-confirmed_cases %>%select(Province_State,Date,confirmed_Case)%>%
+  full_join(death_cases %>%
+              select(Province_State,Date,Death_Case),by = c("Date","Province_State"),)
+
+```
+
+
+3. Append to `covid.usa.states.ts` (created in previous problem) all of the information from matching rows in `vacc.people` (without repeating columns with the same info in the two data sets). 
+```{r}
+# append vacc.people to covid.usa.states.ts by using full_join to include people fully vaccinated and partialy vaccinated
+covid.usa.states.ts <- 
+  covid.usa.states.ts %>% 
+  select(Province_State,Date,confirmed_Case,Death_Case) %>%
+  full_join(vacc.people %>% 
+              select(Province_State,Date,People_Fully_Vaccinated, People_Partially_Vaccinated),
+            by = c("Date"="Date","Province_State")) #joining by date and province_state
+```
+
+
+## Part 2: Let's use the data
+
+1. Using `covid.usa.daily` select *3 highly impacted states*, *3 mildly impacted states* by COVID-19, where by 'highly impacted' I mean the states with high numbers of confirmed cases.  
+
+```{r}
+#3 highly impacted states
+highly_impacted <- covid.usa.daily %>%
+  arrange(desc(Confirmed))%>%
+  slice(1:3)
+highly_impacted$Province_State
+```
+
+```{r}
+## mildly impacted states
+mildly_impacted <- covid.usa.daily%>%
+  arrange(Confirmed)%>%
+  slice(49,29,25)
+mildly_impacted$Province_State
+```
+<h5 style="font-family:verdana;color:red;">Observation</h5>
+3 highly impacted states are California, Texas and Florida since they have a high number of confirmed cases. 3 mildly impacted states are Michigan, Mississippi, Oregon since their confirmed cases are mild.
+
+2. Create a visualization of the evolution of confirmed cases, deaths, and people vaccinated for each of the 6 states identified as *highly* and *mildly* impacted (use the `covid.usa.states.ts` data.frame to create the figure).  
+```{r}
+#using six states that we picked in part 1(highly and mildly impacted states)
+identified_state <- covid.usa.states.ts %>%
+  filter(Province_State == "California" | Province_State == "Texas" | 
+           Province_State == "Florida" | Province_State == "Michigan" | 
+           Province_State == "Mississippi" | Province_State == "Oregon")
+
+#using factor to rearrange the states
+identified_state$Province_State <- factor(identified_state$Province_State, 
+                                  levels = c("California", "Texas", "Florida","Michigan", "Mississippi", "Oregon"))
+
+#organizing the data for plotting the graph
+identified_state <- identified_state[!is.na(identified_state$confirmed_Case) & 
+                       !is.na(identified_state$Death_Case) & 
+                        !is.na(identified_state$People_Fully_Vaccinated),]
+```
+
+```{r}
+#group by states and then make new column for each confirmed case, death case, and vaccine case and scale them between 0 and 1 by dividing by their max because each varibale takes different varibales.
+identified_state <-identified_state %>% group_by(Province_State)%>%
+  mutate(conf_scale = confirmed_Case/max(confirmed_Case), death_scale = Death_Case/max(Death_Case), vac_scale = People_Fully_Vaccinated/max(People_Fully_Vaccinated))%>%
+  select(-People_Partially_Vaccinated)
+```
+
+
+```{r fig.width=9 , fig.height=6}
+# graph
+ggplot(data = identified_state) +
+  scale_x_date(date_labels = "%b  %Y",date_breaks = "1 month")+ #sclae x-axis data by year and month
+  geom_line(aes(x = Date, y = conf_scale, color = "Confirmed")) + 
+  geom_line(aes(x = Date, y = vac_scale, color = "Fully Vaccinated")) + 
+  geom_line(aes(x = Date, y = death_scale, color = "Death")) + 
+  ggtitle("Covid-19 Graph") + #title
+  xlab("Date") + ylab("Count") + #x-axis and y-axis label
+  theme_bw() +
+  facet_wrap(Province_State~., scales = "free") +
+  theme(legend.position = "right",
+        plot.title = element_text(size = 10), 
+        plot.subtitle=element_text(size = 13),
+        axis.text.x = element_text(angle = 90,hjust = 0.5,size = 5),)+
+  labs(subtitle = "(compares the number of confirmed cases, death cases, and people fully vaccinated)")
+
+```
+
+<h5 style="font-family:verdana;color:red;">Observation</h5>
+
+From the above graph, I can see that almost in every state, the vaccination from Jan 2021 to July 2021 goes up with a very high slope like an exponential graph. When we look at the trends of confirmed cases and death that they have low slope and are smoothed from a bit before . the vaccination peak to a bit after the peak (march 2021 to Sep 2021). This makes a good sense since when vaccination is going up, we expect less people get affected a bit after it starts. We also see two more points in almost all graphs were the slope of confirmed cases and to some extent deaths start to increase again. One is around Sep 2021 and the other is Dec-2021 - Jan 2022. This is maybe due to arrival of new variants or changing the policies such as removing mask mandates. Indeed, the Dec 2021 peak is due to arrival of omicron variant. 
+
+Another important aspects of the plots is that when vaccination rate is high, such in Dec 2021, with the arrival of the new variant, the change in the slope of the confirmed cases is much more than the change in the slope of deaths. This implies that even though many people got infected, but the death cases did not grow with the same rate.  
+
+The area under the curve is also interesting. We can see that Oregon is relatively having lower area under the curve for confirmed cases and deaths which implies over time, there were fewer cases in comparison with the other states. Of course the population is not considered here, and to have a better picture this values should be normalized with respect to the population of the state. 
+
+
+
+
+3. Do you see any interesting change in the trajectories of the corresponding time series for the number of cases and deaths taking place with vaccinations?  Produce **meaningful** summaries that enable you to quantify this change (e.g., average number of new cases in windows of 90 days before vs 90 days after vaccination started). One or two summary measures is good.  Make either a table or a figure to display your findings and **comment on them**.
+```{r}
+# daily data summary by state for 01-04-2021
+vaccin_start <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports_us/03-03-2021.csv") %>% 
+  filter(Province_State == "Florida") %>% 
+  select(Deaths)
+
+# daily data summary by state for 06-03-2021
+after_90 <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports_us/06-03-2021.csv") %>% 
+  filter(Province_State == "Florida") %>% 
+  select(Deaths)
+
+# daily data summary by state for 10-06-2020
+before_90 <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports_us/01-03-2021.csv") %>% 
+  filter(Province_State == "Florida") %>% 
+  select(Deaths)
+```
+
+```{r }
+# calculate the number of new cases 90 days before and after the vaccination start
+total_before_90 <- as.numeric(vaccin_start - before_90)
+total_after_90 <- as.numeric(after_90 - vaccin_start)
+
+# calculate mean
+mean_before_90 <- total_before_90/90
+mean_after_90 <- total_after_90/90
+
+# create a new data frame
+data.frame_90 <- data.frame(days = c("Before 90 days", "After 90 days"),
+                 cases_90 = c(total_before_90, total_after_90),
+                 mean_90 = c(mean_before_90, mean_after_90)) 
+data.frame_90
+
+#graph
+ggplot(data = data.frame_90) + 
+  geom_col(aes(x = days, y = cases_90, fill = cases_90), position = position_dodge(0.7),width = 0.7) + 
+  geom_col(aes(x = days, y = mean_90, fill = mean_90), position = position_dodge(0.7),width = 0.7) +
+  ggtitle("Deaths cases taking place with vaccinations") +#title
+  xlab("Before and after vaccination") + ylab("Total cases") + #x-axis and y-axis label
+  theme_bw() +
+  labs(subtitle = "(90 days before and after vaccination)") + #subtitle
+  scale_fill_continuous(name = "The number\nof cases") # legend name
+```
+
+<h5 style="font-family:verdana;color:red;">Observation</h5>
+Form graph, I can see that before vaccination, there were 9280  death cases, and 90 days after starting the vaccination the death cases decreased to 5706 cases which is almost 61% decreased. I also can confirm from their average too that the average of cases decreased form 103 to 63 after vaccination. 
+
+
+
+4. Choose two of your six states.  Load their corresponding policy tracker data sets and use the relevant functions in the `stringr` package to extract policies related to any one of `vaccination`, `mask` or `distancing`.
+
+
+<h5 style="font-family:verdana;color:red;">NOTE</h5>
+I chose California and Oregon as my state and load their data sets. I decide to find distancing policy in these two states.
+
+
+```{r echo= FALSE}
+#California policy data
+policytrackerCA <- read_csv("https://raw.githubusercontent.com/govex/COVID-19/govex_data/data_tables/policy_data/table_data/Current/California_policy.csv")
+
+#Florida policy data
+policytrackerFL <- read_csv("https://raw.githubusercontent.com/govex/COVID-19/govex_data/data_tables/policy_data/table_data/Current/Florida_policy.csv")
+```
+```{r}
+#looking for policy that has distance word on it. 
+#using str_detect which is return TRUe if it finds what I am looking for
+Cali_dist_policy <- policytrackerCA %>%
+  filter(str_detect(policy,"distancing|distance|Distance"))
+
+Cali_dist_policy$policy
+```
+
+```{r}
+#same as california but this time, I am looking distance word in Oregon data set
+OR_dist_policy <- policytrackerOR %>%
+  filter(str_detect(policy,"distancing|distance|Distance"))
+
+OR_dist_policy$policy
+
+```
+
+5. Get Creative: formulate and explore ONE question about the 3 highly and 3 mildly affected states with any of the data sets I have provided.
+
+
+<h5 style="font-family:verdana;color:red;">Question:</h5>
+I decide to take look at the ratio(death case/confirmed case)of my 6 states(highly_impacted and mildly_impacted) in covid.usa.daily data frame. I am wondering is the ration is high in the states that has high confirmed case or not?
+
+
+```{r}
+#combinig the highly_impacted and mildly_impacted data frame
+states <- union(highly_impacted, mildly_impacted)
+states$Province_State
+```
+
+
+```{r}
+#plot
+ggplot() +
+  geom_col(data = states,
+           aes(x = Province_State, y = Case_Fatality_Ratio,
+               fill = Province_State)) +
+  xlab("States") + ylab("Ratio") +
+  ylim(0,2)+ #range of y-axis
+  ggtitle("Fatality Ratio") + #title
+  theme_bw() +
+  scale_fill_discrete(name = "States") # legend name
+```
+
+<h5 style="font-family:verdana;color:red;">Observation</h5>
+
+From the above graph I can see that Mississippi has the highest ratio in the 6 states even though it was a mildly effected states in confirmed cases. The same thing is true for Michigan. Before exploring, I expected that the highest state would be in California because it has highest confirmed case, but we can see that there is not a direct relationship between high number in confirmed case and death. Oregon was in the middle of the list in terms of number of confirmed cases and also, has a relatively low death to confirmed cases ratio.
+
+
+Phewww... **have fun and GOOD LUCK**!!
